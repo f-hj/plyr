@@ -407,16 +407,21 @@ class PreviewThumbnails {
             previewImage.onload = () =>
                 this.showImage(previewImage, frame, qualityIndex, thumbNum, thumbFilename, true);
             this.loadingImage = previewImage;
-            this.removeOldImages(previewImage);
         } else {
             // Update the existing image
             this.showImage(this.currentImageElement, frame, qualityIndex, thumbNum, thumbFilename, false);
             this.currentImageElement.dataset.index = thumbNum;
-            this.removeOldImages(this.currentImageElement);
         }
     }
 
     showImage(previewImage, frame, qualityIndex, thumbNum, thumbFilename, newImage = true) {
+        const currentThumbNum = this.thumbnails[0].frames.findIndex(
+            f => this.seekTime >= f.startTime && this.seekTime <= f.endTime,
+        );
+        if (thumbNum !== currentThumbNum) {
+            this.player.debug.log(`Not showing thumb: wanted: ${thumbNum}, current: ${currentThumbNum}`);
+            return;
+        }
         this.player.debug.log(
             `Showing thumb: ${thumbFilename}. num: ${thumbNum}. qual: ${qualityIndex}. newimg: ${newImage}`,
         );
@@ -485,6 +490,9 @@ class PreviewThumbnails {
                     let foundOne = false;
 
                     thumbnailsClone.forEach(frame => {
+                        if (frame.startTime > this.player.media.duration) {
+                            return;
+                        }
                         const newThumbFilename = frame.text;
 
                         if (newThumbFilename !== oldThumbFilename) {

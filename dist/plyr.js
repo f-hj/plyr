@@ -7494,18 +7494,27 @@ typeof navigator === "object" && (function (global, factory) {
           };
 
           this.loadingImage = previewImage;
-          this.removeOldImages(previewImage);
         } else {
           // Update the existing image
           this.showImage(this.currentImageElement, frame, qualityIndex, thumbNum, thumbFilename, false);
           this.currentImageElement.dataset.index = thumbNum;
-          this.removeOldImages(this.currentImageElement);
         }
       }
     }, {
       key: "showImage",
       value: function showImage(previewImage, frame, qualityIndex, thumbNum, thumbFilename) {
+        var _this8 = this;
+
         var newImage = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : true;
+        var currentThumbNum = this.thumbnails[0].frames.findIndex(function (f) {
+          return _this8.seekTime >= f.startTime && _this8.seekTime <= f.endTime;
+        });
+
+        if (thumbNum !== currentThumbNum) {
+          this.player.debug.log("Not showing thumb: wanted: ".concat(thumbNum, ", current: ").concat(currentThumbNum));
+          return;
+        }
+
         this.player.debug.log("Showing thumb: ".concat(thumbFilename, ". num: ").concat(thumbNum, ". qual: ").concat(qualityIndex, ". newimg: ").concat(newImage));
         this.setImageSizeAndOffset(previewImage, frame);
 
@@ -7527,7 +7536,7 @@ typeof navigator === "object" && (function (global, factory) {
     }, {
       key: "removeOldImages",
       value: function removeOldImages(currentImage) {
-        var _this8 = this;
+        var _this9 = this;
 
         // Get a list of all images, convert it from a DOM list to an array
         Array.from(this.currentImageContainer.children).forEach(function (image) {
@@ -7535,7 +7544,7 @@ typeof navigator === "object" && (function (global, factory) {
             return;
           }
 
-          var removeDelay = _this8.usingSprites ? 500 : 1000;
+          var removeDelay = _this9.usingSprites ? 500 : 1000;
 
           if (image.dataset.index !== currentImage.dataset.index && !image.dataset.deleting) {
             // Wait 200ms, as the new image can take some time to show on certain browsers (even though it was downloaded before showing). This will prevent flicker, and show some generosity towards slower clients
@@ -7543,11 +7552,11 @@ typeof navigator === "object" && (function (global, factory) {
             // eslint-disable-next-line no-param-reassign
             image.dataset.deleting = true; // This has to be set before the timeout - to prevent issues switching between hover and scrub
 
-            var currentImageContainer = _this8.currentImageContainer;
+            var currentImageContainer = _this9.currentImageContainer;
             setTimeout(function () {
               currentImageContainer.removeChild(image);
 
-              _this8.player.debug.log("Removing thumb: ".concat(image.dataset.filename));
+              _this9.player.debug.log("Removing thumb: ".concat(image.dataset.filename));
             }, removeDelay);
           }
         });
@@ -7557,43 +7566,47 @@ typeof navigator === "object" && (function (global, factory) {
     }, {
       key: "preloadNearby",
       value: function preloadNearby(thumbNum) {
-        var _this9 = this;
+        var _this10 = this;
 
         var forward = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
         return new Promise(function (resolve) {
           setTimeout(function () {
-            var oldThumbFilename = _this9.thumbnails[0].frames[thumbNum].text;
+            var oldThumbFilename = _this10.thumbnails[0].frames[thumbNum].text;
 
-            if (_this9.showingThumbFilename === oldThumbFilename) {
+            if (_this10.showingThumbFilename === oldThumbFilename) {
               // Find the nearest thumbs with different filenames. Sometimes it'll be the next index, but in the case of sprites, it might be 100+ away
               var thumbnailsClone;
 
               if (forward) {
-                thumbnailsClone = _this9.thumbnails[0].frames.slice(thumbNum);
+                thumbnailsClone = _this10.thumbnails[0].frames.slice(thumbNum);
               } else {
-                thumbnailsClone = _this9.thumbnails[0].frames.slice(0, thumbNum).reverse();
+                thumbnailsClone = _this10.thumbnails[0].frames.slice(0, thumbNum).reverse();
               }
 
               var foundOne = false;
               thumbnailsClone.forEach(function (frame) {
+                if (frame.startTime > _this10.player.media.duration) {
+                  return;
+                }
+
                 var newThumbFilename = frame.text;
 
                 if (newThumbFilename !== oldThumbFilename) {
                   // Found one with a different filename. Make sure it hasn't already been loaded on this page visit
-                  if (!_this9.loadedImages.includes(newThumbFilename)) {
+                  if (!_this10.loadedImages.includes(newThumbFilename)) {
                     foundOne = true;
 
-                    _this9.player.debug.log("Preloading thumb filename: ".concat(newThumbFilename));
+                    _this10.player.debug.log("Preloading thumb filename: ".concat(newThumbFilename));
 
-                    var urlPrefix = _this9.thumbnails[0].urlPrefix;
+                    var urlPrefix = _this10.thumbnails[0].urlPrefix;
                     var thumbURL = urlPrefix + newThumbFilename;
                     var previewImage = new Image();
                     previewImage.src = thumbURL;
 
                     previewImage.onload = function () {
-                      _this9.player.debug.log("Preloaded thumb filename: ".concat(newThumbFilename));
+                      _this10.player.debug.log("Preloaded thumb filename: ".concat(newThumbFilename));
 
-                      if (!_this9.loadedImages.includes(newThumbFilename)) _this9.loadedImages.push(newThumbFilename); // We don't resolve until the thumb is loaded
+                      if (!_this10.loadedImages.includes(newThumbFilename)) _this10.loadedImages.push(newThumbFilename); // We don't resolve until the thumb is loaded
 
                       resolve();
                     };
@@ -7612,7 +7625,7 @@ typeof navigator === "object" && (function (global, factory) {
     }, {
       key: "getHigherQuality",
       value: function getHigherQuality(currentQualityIndex, previewImage, frame, thumbFilename) {
-        var _this10 = this;
+        var _this11 = this;
 
         if (currentQualityIndex < this.thumbnails.length - 1) {
           // Only use the higher quality version if it's going to look any better - if the current thumb is of a lower pixel density than the thumbnail container
@@ -7626,10 +7639,10 @@ typeof navigator === "object" && (function (global, factory) {
             // Recurse back to the loadImage function - show a higher quality one, but only if the viewer is on this frame for a while
             setTimeout(function () {
               // Make sure the mouse hasn't already moved on and started hovering at another image
-              if (_this10.showingThumbFilename === thumbFilename) {
-                _this10.player.debug.log("Showing higher quality thumb for: ".concat(thumbFilename));
+              if (_this11.showingThumbFilename === thumbFilename) {
+                _this11.player.debug.log("Showing higher quality thumb for: ".concat(thumbFilename));
 
-                _this10.loadImage(currentQualityIndex + 1);
+                _this11.loadImage(currentQualityIndex + 1);
               }
             }, 300);
           }
